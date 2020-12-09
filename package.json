@@ -1,0 +1,42 @@
+{
+	"name": "@aritz-cracker/post-parser",
+	"version": "0.9.29",
+	"description": "Simple event-emitting",
+	"bin": "./bin/snowball_server.js",
+	"main": "index.js",
+	"private": true,
+	"scripts": {
+		"test": "mocha",
+		"test:all": "TEST_EVERYTHING=y mocha",
+		"test:cov": "nyc --check-coverage --lines 100 --functions 100 --branches 100 --statements 100 mocha",
+		"test:final": "eslint . && npm run test:cov",
+		"test:lint": "eslint .",
+		"travis:start": "npm run test:final",
+		"travis:after": "nyc report --reporter=text-lcov | coveralls",
+		"postinstall": "node scripts/postinstall.js"
+	},
+	"repository": {
+		"type": "git",
+		"url": "git+https://github.com/ARitz-Cracker/post-parser"
+	},
+	"keywords": [],
+	"author": "Aritz Beobide-Cardinal <aritz@aritzcracker.ca>",
+	"license": "MIT",
+	"bugs": {
+		"url": "https://github.com/ARitz-Cracker/post-parser/issues"
+	},
+	"homepage": "https://github.com/ARitz-Cracker/post-parser",
+	"dependencies": {
+		"arc-config": "^1.1.2",
+		"scon": "^2.1.2",
+		"ws": "^7.1.2",
+		"wtfnode": "^0.8.0"
+	},
+	"devDependencies": {
+		"chai": "^4.2.0",
+		"chai-as-promised": "^7.1.1",
+		"eslint": "^7.15.0",
+		"mocha": "^8.2.1",
+		"nyc": "^15.1.0"
+	}
+}
