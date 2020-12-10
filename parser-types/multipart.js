@@ -1,4 +1,4 @@
-// This code is bad and I should feel bad
+// This code is bad and I should feel bad, but I definitely don't have the time to re-factor it. Hey, as long as it works!
 const {Writable, PassThrough} = require("stream");
 const {isSafeProperty} = require("safeify-object");
 
@@ -53,13 +53,11 @@ class StreamedMultipartDecoder extends Writable {
 			// Header is too large or doesn't have a ":"; ignore it.
 			return;
 		}
-		/*
-		 * https://tools.ietf.org/html/rfc7578
-		 * The multipart/form-data media type does not support any MIME header
-		 * fields in parts other than Content-Type, Content-Disposition, and (in
-		 * limited circumstances) Content-Transfer-Encoding.  Other header
-		 * fields MUST NOT be included and MUST be ignored.
-		 */
+		/* https://tools.ietf.org/html/rfc7578
+		   The multipart/form-data media type does not support any MIME header
+		   fields in parts other than Content-Type, Content-Disposition, and (in
+		   limited circumstances) Content-Transfer-Encoding.  Other header
+		   fields MUST NOT be included and MUST be ignored. */
 		const headerKey = chunk.slice(0, headerIndex).toString("ascii")
 			.toLowerCase();
 		if(!allowedMultiHeaders[headerKey]){
@@ -103,7 +101,7 @@ class StreamedMultipartDecoder extends Writable {
 		}
 	}
 	handleData(chunk, end, callback){
-		let callbackNeedsToBeCalled = false;
+		let callbackNeedsToBeCalled = callback != null;
 		let i = 0;
 		let nextIndex;
 		while(i < chunk.length){
@@ -190,7 +188,7 @@ class StreamedMultipartDecoder extends Writable {
 							chunk = chunk.slice(0, this._maxDataLen - this._curDataLen);
 						}
 						this._curDataLen += chunk.length;
-						this._curVal = Buffer.concat([ this._curVal, chunk ], this._curVal.length + chunk.length);
+						this._curVal = Buffer.concat([this._curVal, chunk], this._curVal.length + chunk.length);
 					}
 					i = chunk.length;
 					break;
@@ -201,8 +199,10 @@ class StreamedMultipartDecoder extends Writable {
 							chunk = chunk.slice(0, this._maxFileLen - this._curFileLen);
 						}
 						this._curFileLen += chunk.length;
-						// The file's destination may be slower than the network, who knows?!
-						if(!this._fileStream.write(chunk)){
+						/* The file's destination may be slower than the network, who knows?!
+						   This is also the literally only reason why I'm moving the write callback around...
+						   Otherwise, everything could be handled syncronously */
+						if(!this._fileStream.write(chunk) && callbackNeedsToBeCalled){
 							callbackNeedsToBeCalled = false;
 							this._fileStream.once("drain", callback);
 						}
@@ -256,9 +256,7 @@ class StreamedMultipartDecoder extends Writable {
 					// MULTISTATE_HEADERS goes here, nothing happens.
 			}
 		}
-		if(callbackNeedsToBeCalled){
-			callback();
-		}
+		return callbackNeedsToBeCalled;
 	}
 	lookForBoundry(chunk){
 		const index = chunk.indexOf(this._boundary);
@@ -266,27 +264,43 @@ class StreamedMultipartDecoder extends Writable {
 			const termIndex = index + this._boundary.length;
 			const termSlice = chunk.slice(termIndex, termIndex + 2);
 			if(termSlice.equals(this._boundarySeperate)){
-				return [ index, termIndex + 2 ];
+				return [index, termIndex + 2];
 			}else if(termSlice.equals(this._boundaryEnd)){
-				return [ index, null ];
+				return [index, null];
 			}
 			// Not a proper boundry, handle it as normal data
 		}
-		return [ null, null ];
+		return [null, null];
 	}
 	processBounderies(maxLen, callback){
+		// All code-paths within the while loop
+		let callbackNeedsToBeCalled = true;
 		while(this._buffer.length >= maxLen){
 			const searchEnd = this._buffer.length - this._bufferSearchLength;
 			if(searchEnd < 0){
-				this.handleData(this._buffer, true, callback);
+				if(!this.handleData(this._buffer, true, callbackNeedsToBeCalled ? callback : null)){
+					callbackNeedsToBeCalled = false;
+				}
 				break;
 			}
-			const[ dataEnd, newDataStart ] = this.lookForBoundry(this._buffer);
+			const [dataEnd, newDataStart] = this.lookForBoundry(this._buffer);
 			if(dataEnd == null){
-				this.handleData(this._buffer.slice(0, searchEnd), false, callback);
+				if(!this.handleData(
+					this._buffer.slice(0, searchEnd),
+					false,
+					callbackNeedsToBeCalled ? callback : null
+				)){
+					callbackNeedsToBeCalled = false;
+				}
 				this._buffer = this._buffer.slice(searchEnd);
 			}else{
-				this.handleData(this._buffer.slice(0, dataEnd), true, callback);
+				if(!this.handleData(
+					this._buffer.slice(0, dataEnd),
+					true,
+					callbackNeedsToBeCalled ? callback : null
+				)){
+					callbackNeedsToBeCalled = false;
+				}
 				if(newDataStart){
 					this._buffer = this._buffer.slice(newDataStart);
 				}else{
@@ -294,6 +308,9 @@ class StreamedMultipartDecoder extends Writable {
 					break;
 				}
 			}
+		}
+		if(callbackNeedsToBeCalled){
+			callback();
 		}
 	}
 	_write(chunk, encoding, callback){
@@ -306,7 +323,7 @@ class StreamedMultipartDecoder extends Writable {
 			chunk = chunk.slice(0, chunk.length - (this._curTotalLen - this._maxTotalLen));
 		}
 
-		this._buffer = Buffer.concat([ this._buffer, chunk ], this._buffer.length + chunk.length);
+		this._buffer = Buffer.concat([this._buffer, chunk], this._buffer.length + chunk.length);
 		if(this._buffer.length < this._minBufferLength){
 			callback();
 			return;

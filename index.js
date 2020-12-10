@@ -11,8 +11,8 @@ const HTTP_STATUS_ERROR = 500;
  */
 class POSTParseError extends Error {
 	/**
-	 * @param {string} message 
-	 * @param {number} [httpStatus=500] 
+	 * @param {string} message
+	 * @param {number} [httpStatus=500]
 	 */
 	constructor(message, httpStatus){
 		super(message);

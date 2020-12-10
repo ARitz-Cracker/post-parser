@@ -1,4 +1,4 @@
-const{Writable} = require("stream");
+const {Writable} = require("stream");
 const {stripUnsafeProperties} = require("safeify-object");
 class StreamedJSONDecoder extends Writable {
 	constructor(maxLen = 65535){
@@ -16,7 +16,7 @@ class StreamedJSONDecoder extends Writable {
 				], this.maxLen);
 				this.curLen = this.maxLen;
 			}else{
-				this._buffer = Buffer.concat([ this._buffer, chunk ], this._buffer.length + chunk.length);
+				this._buffer = Buffer.concat([this._buffer, chunk], this._buffer.length + chunk.length);
 				this.curLen += chunk.length;
 			}
 		}

@@ -1,8 +1,7 @@
-/*
- * A lot of this code is adapted from querystring.unescapeBuffer in NodeJS
- * Copyright Joyent, Inc. and other Node contributors.
- * Copyright (c) 2019-2020 Aritz Beobide-Cardinal
- */
+/* A lot of this code is adapted from querystring.unescapeBuffer in NodeJS
+   Copyright Joyent, Inc. and other Node contributors.
+   Copyright (c) 2019-2020 Aritz Beobide-Cardinal */
+const {isSafeProperty} = require("safeify-object");
 const {Writable} = require("stream");
 
 // eslint-disable-next-line no-magic-numbers
@@ -109,10 +108,8 @@ class StreamedURIDecoder extends Writable {
 						default:
 							if(this.checkPostdataSeperators(c)){
 								out[this.outIndex++] = c;
-								/*
-								 * console.log(c, String.fromCharCode(c));
-								 * console.log(out);
-								 */
+								/* console.log(c, String.fromCharCode(c));
+								   console.log(out); */
 							}
 							break;
 					}
