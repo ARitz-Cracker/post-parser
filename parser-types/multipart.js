@@ -1,23 +1,21 @@
 // This code is bad and I should feel bad, but I definitely don't have the time to re-factor it. Hey, as long as it works!
 const {Writable, PassThrough} = require("stream");
 const {isSafeProperty} = require("safeify-object");
-
-const charsetAliases = {
-	"iso-8859-1": "latin1",
-	"us-ascii": "ascii",
-	"utf-8": "utf8",
-	"utf-16le": "utf16le",
-	"win-1252": "latin1" // win-1252 to latin1 is technically incorrect, but nobody uses it nowadays anyway.
-};
-
-const allowedMultiHeaders = {
-	"content-disposition": true,
+const charsetAliases = new Map([
+	["iso-8859-1", "latin1"],
+	["us-ascii", "ascii"],
+	["utf-8", "utf8"],
+	["utf-16le", "utf16le"],
+	["win-1252", "latin1"] // win-1252 to latin1 is technically incorrect, but nobody uses it nowadays anyway.
+])
+const allowedMultiHeaders = new Set([
+	"content-disposition",
 	/* Content-Transfer-Encoding isn't in HTTP anymore and good fucking riddance. Dealing with all the different 7-bit
 	   encoding methods, as one would do in e-mail, is a big headache. Also, no website I make works for browsers which
 	   don't support es2017, and no browser which does uses Content-Transfer-Encoding. So hooray for me.
-	   "content-transfer-encoding": true, */
-	"content-type": true
-};
+	   "content-transfer-encoding", */
+	"content-type"
+]);
 const MAX_MULTIPART_HEADER_LENGTH = 1024;
 
 const MULTISTATE_HEADERS = 0;
@@ -60,7 +58,7 @@ class StreamedMultipartDecoder extends Writable {
 		   fields MUST NOT be included and MUST be ignored. */
 		const headerKey = chunk.slice(0, headerIndex).toString("ascii")
 			.toLowerCase();
-		if(!allowedMultiHeaders[headerKey]){
+		if(!allowedMultiHeaders.has(headerKey)){
 			return;
 		}
 		headerIndex += 2; // ": "
@@ -85,8 +83,11 @@ class StreamedMultipartDecoder extends Writable {
 				if(headerIndex2 === -1){
 					headerIndex2 = chunk.length;
 				}
-				const val = chunk.slice(headerIndex, headerIndex2).toString("ascii");
-				this._curHeaders[headerKey][curSubKey] = val;
+				const val = chunk.slice(headerIndex, headerIndex2).toString("utf8");
+				/* istanbul ignore else */
+				if(isSafeProperty(curSubKey)){
+					this._curHeaders[headerKey][curSubKey] = val;
+				}
 				curSubKey = null;
 				headerIndex = headerIndex2;
 				if(quoted){
@@ -224,14 +225,14 @@ class StreamedMultipartDecoder extends Writable {
 					// Charsets are experimental and aren't in included in the unit tests
 					/* istanbul ignore next */
 					if(this._curHeaders["content-type"] != null && this._curHeaders["content-type"].charset){
-						encoding = charsetAliases[this._curHeaders["content-type"].charset];
+						encoding = charsetAliases.get(this._curHeaders["content-type"].charset);
 						if(encoding == null){
 							encoding = "latin1"; // mojibake ho!
 						}
 					}
 					/* istanbul ignore next */
 					if(encoding == null && this.decoded._charset_){
-						encoding = charsetAliases[this.decoded._charset_];
+						encoding = charsetAliases.get(this.decoded._charset_);
 						if(encoding == null){
 							encoding = "latin1";
 						}
@@ -278,13 +279,16 @@ class StreamedMultipartDecoder extends Writable {
 		while(this._buffer.length >= maxLen){
 			const searchEnd = this._buffer.length - this._bufferSearchLength;
 			if(searchEnd < 0){
+				/* istanbul ignore next */
 				if(!this.handleData(this._buffer, true, callbackNeedsToBeCalled ? callback : null)){
+					// TODO: I'm not sure what input would be required to do this
 					callbackNeedsToBeCalled = false;
 				}
 				break;
 			}
 			const [dataEnd, newDataStart] = this.lookForBoundry(this._buffer);
 			if(dataEnd == null){
+				/* istanbul ignore next */
 				if(!this.handleData(
 					this._buffer.slice(0, searchEnd),
 					false,
@@ -294,11 +298,13 @@ class StreamedMultipartDecoder extends Writable {
 				}
 				this._buffer = this._buffer.slice(searchEnd);
 			}else{
+				/* istanbul ignore next */
 				if(!this.handleData(
 					this._buffer.slice(0, dataEnd),
 					true,
 					callbackNeedsToBeCalled ? callback : null
 				)){
+					// TODO: I'm not sure what input would be required to do this
 					callbackNeedsToBeCalled = false;
 				}
 				if(newDataStart){

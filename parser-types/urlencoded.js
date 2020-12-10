@@ -1,6 +1,6 @@
 /* A lot of this code is adapted from querystring.unescapeBuffer in NodeJS
    Copyright Joyent, Inc. and other Node contributors.
-   Copyright (c) 2019-2020 Aritz Beobide-Cardinal */
+   Copyright (c) 2018-2020 Aritz Beobide-Cardinal */
 const {isSafeProperty} = require("safeify-object");
 const {Writable} = require("stream");
 
@@ -167,7 +167,7 @@ class StreamedURIDecoder extends Writable {
 				out = newbuff;
 			}
 
-			out[this.outIndex++] = 37/* %*/;
+			out[this.outIndex++] = 37; // '%'
 			if(this.URIState === 2){
 				out[this.outIndex++] = this._hexchar;
 			}

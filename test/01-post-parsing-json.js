@@ -82,4 +82,14 @@ describe("POST Parsing: JSON", function(){
 			{}
 		);
 	});
+	it("ignores potentially unsafe properties", async function(){
+		const decoder = doTest(
+			"{\"hello\":\"world\",\"__proto__\":{\"evil\":true}}", 2, 2, 50
+		);
+		const decodedData = await new Promise(resolve => {
+			decoder.on("postData", resolve);
+		});
+		expect(decodedData).to.deep.equal({hello: "world"});
+		expect(decodedData.__proto__).to.equal(Object.prototype);
+	});
 });

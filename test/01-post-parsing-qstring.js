@@ -194,4 +194,12 @@ describe("POST Parsing: URL Encoded", function(){
 			)
 		]);
 	});
+	it("ignores data with potentially unsafe properties", async function(){
+		const decoder = doTest("hello=world&__proto__=evil&valueOf=evil");
+		const decodedData = await new Promise(resolve => {
+			decoder.on("postData", resolve);
+		});
+		expect(decodedData).to.deep.equal({hello: "world"});
+		expect(decodedData.__proto__).to.equal(Object.prototype);
+	})
 });

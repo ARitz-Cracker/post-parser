@@ -7,6 +7,7 @@ const expect = chai.expect;
 const {StreamedMultipartDecoder} = require("../parser-types/multipart.js");
 const {StreamToBuffer} = require("stream-to-buffer-to-stream");
 const fs = require("fs");
+const {Transform} = require("stream");
 
 const postFile = fs.readFileSync(__dirname + "/../test_files/multipart/post_file.png");
 
@@ -39,7 +40,6 @@ const doTest = async function(testFile, chunkLength, boundary, delay = 10, maxDa
 	result.data = await postData;
 	return result;
 };
-
 describe("POST Parsing: Multipart", function(){
 	if(process.env.NYC_CONFIG == null && process.env.TEST_EVERYTHING == null && process.env.VSCODE_IPC_HOOK == null){
 		before(function(){
@@ -319,5 +319,119 @@ describe("POST Parsing: Multipart", function(){
 				}
 			}
 		);
+	});
+	it("Ignores potentially unsafe properties", function(){
+		return expect((async() => doTest("post9", 2, "4yylm40", 2))()).to.eventually.deep.equal(
+			{
+				files: {},
+				data: {}
+			}
+		);
+	});
+	it("Can handle large file uploads with slow stream destinations", async function(){
+		this.timeout(100000);
+		const multipartDecoder = new StreamedMultipartDecoder("4yylm40");
+		const postFilePromise = new Promise(resolve => {
+			multipartDecoder.once("postFile", async(name, fileName, mimeType, fileStream) => {
+				const fileContent = new StreamToBuffer();
+				const slowStream = new Transform({
+					highWaterMark: 1024,
+					transform(chunk, encoding, callback){
+						setTimeout(() => {
+							callback(null, chunk);
+						}, 10);
+					}
+				});
+				fileStream.pipe(slowStream);
+				slowStream.pipe(fileContent);
+				resolve({
+					name,
+					fileName,
+					mimeType,
+					content: await fileContent.result()
+				});
+			});
+		});
+		const postDataPromise = new Promise(resolve => {
+			multipartDecoder.on("postData", resolve);
+		});
+		multipartDecoder.write("--4yylm40\r\n" +
+			"Content-Disposition: form-data; name=\"file_upload\"; filename=\"big_data.txt\"\r\n" +
+			"Content-Type: text/plain\r\n\r\n");
+		for(let i = 0; i < 1000; i += 1){
+			if(!multipartDecoder.write("A".repeat(1000))){
+				await new Promise(resolve => {
+					multipartDecoder.once("drain", resolve);
+				});
+			}
+		}
+		multipartDecoder.end("\r\n--4yylm40--");
+		await expect(postDataPromise).to.eventually.deep.equal({});
+		await expect(postFilePromise).to.eventually.deep.equal({
+			name: "file_upload",
+			fileName: "big_data.txt",
+			mimeType: "text/plain",
+			content: Buffer.alloc(1000000, "A")
+		});
+	});
+	it("Can handle multiple large file uploads with slow stream destinations", async function(){
+		this.timeout(100000);
+		const multipartDecoder = new StreamedMultipartDecoder("4yylm40");
+		const postFilePromises = [];
+		const postFilePromiseResolvers = [];
+		for(let i = 0; i < 10; i += 1){
+			postFilePromises.push(new Promise(resolve => {
+				postFilePromiseResolvers.push(resolve);
+			}));
+		}
+		multipartDecoder.on("postFile", async(name, fileName, mimeType, fileStream) => {
+			const fileUploadId = Number(name.substring("file_upload_".length));
+			const fileContent = new StreamToBuffer();
+			const slowStream = new Transform({
+				highWaterMark: 1024,
+				transform(chunk, encoding, callback){
+					setTimeout(() => {
+						callback(null, chunk);
+					}, 10);
+				}
+			});
+			fileStream.pipe(slowStream);
+			slowStream.pipe(fileContent);
+			postFilePromiseResolvers[fileUploadId]({
+				name,
+				fileName,
+				mimeType,
+				content: await fileContent.result()
+			});
+		});
+		const postDataPromise = new Promise(resolve => {
+			multipartDecoder.on("postData", resolve);
+		});
+		for(let i = 0; i < 10; i += 1){
+			multipartDecoder.write("--4yylm40\r\n" +
+				"Content-Disposition: form-data; name=\"file_upload_" + i + "\"; filename=\"big_data_" + i + ".txt\"\r\n" +
+				"Content-Type: text/plain\r\n\r\n");
+			for(let ii = 0; ii < 100; ii += 1){
+				// AAAA..., BBBB..., CCCC..., etc.
+				if(!multipartDecoder.write(String.fromCharCode(65 + i).repeat(1000))){
+					await new Promise(resolve => {
+						multipartDecoder.once("drain", resolve);
+					});
+				}
+			}
+			multipartDecoder.write("\r\n");
+		}
+		multipartDecoder.end("--4yylm40--");
+		await expect(postDataPromise).to.eventually.deep.equal({});
+		const fileUploadExpectedValues = [];
+		for(let i = 0; i < 10; i += 1){
+			fileUploadExpectedValues[i] = {
+				name: "file_upload_" + i,
+				fileName: "big_data_" + i + ".txt",
+				mimeType: "text/plain",
+				content: Buffer.alloc(100000, 65 + i)
+			};
+		}
+		await expect(Promise.all(postFilePromises)).to.eventually.deep.equal(fileUploadExpectedValues);
 	});
 });

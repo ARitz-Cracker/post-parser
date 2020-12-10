@@ -1,0 +1,10 @@
+--4yylm40
+Content-Disposition: form-data; name="constructor"
+
+aaaaaaaaaa
+--4yylm40
+Content-Disposition: form-data; name="valueOf"; filename="post_file.txt"
+Content-Type: text/plain
+
+aaaaaaaaaa
+--4yylm40--
