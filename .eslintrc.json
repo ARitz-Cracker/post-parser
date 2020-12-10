@@ -6,7 +6,8 @@
 	"env": {
 		"browser": true,
 		"node": true,
-		"es6": true
+		"es2017": true,
+		"mocha": true
 	},
 	"extends": "eslint:recommended",
 	"rules": {
@@ -45,7 +46,7 @@
 		"no-undef-init": "error",
 		"no-sync": ["error", { "allowAtRootLevel": true }],
 		"array-bracket-newline": ["error", {"multiline": true}],
-		"array-bracket-spacing": ["error", "always", { "singleValue": false, "objectsInArrays": false, "arraysInArrays": false}],
+		"array-bracket-spacing": ["error", "never"],
 		"array-element-newline": ["error", "consistent"],
 		"block-spacing": ["error", "never"],
 		"brace-style": ["error", "1tbs"],
@@ -65,12 +66,12 @@
 		"indent": ["error", "tab", {"SwitchCase": 1, "VariableDeclarator": 1, "outerIIFEBody": 0, "MemberExpression": 1, "FunctionDeclaration": {"body": 1, "parameters": 1}, "FunctionExpression": {"body": 1, "parameters": 1}, "CallExpression": {"arguments": 1}, "ArrayExpression": 1, "ObjectExpression": 1, "ImportDeclaration": 1, "flatTernaryExpressions": true}],
 		"jsx-quotes": ["error", "prefer-double"],
 		"key-spacing": ["error", { "beforeColon": false, "afterColon": true, "mode": "strict" }],
-		"keyword-spacing": ["error", { "before": false, "after": false, "overrides": {"this":{"before": true}, "return":{"after": true}, "case":{"after": true}}}],
+		"keyword-spacing": ["error", { "before": false, "after": false, "overrides": {"this":{"before": true}, "return":{"after": true}, "case":{"after": true}, "const":{"after": true}}}],
 		"linebreak-style": ["error", "unix"],
 		"lines-around-comment": "off",
 		"lines-between-class-members": ["error", "never"],
 		"max-len": ["error", { "code": 120 ,"ignoreUrls": true, "ignoreStrings": true, "ignoreTemplateLiterals": true, "ignoreComments": true}],
-		"multiline-comment-style": ["warn", "starred-block"],
+		"multiline-comment-style": ["warn", "bare-block"],
 		"multiline-ternary": ["error", "always-multiline"],
 		"new-cap": ["error", { "newIsCap": true, "capIsNew": false, "properties": false}],
 		"new-parens": "error",
@@ -106,7 +107,7 @@
 		"switch-colon-spacing": ["error", {"after": false, "before": false}],
 		"template-tag-spacing": ["error", "always"],
 		"arrow-body-style": ["error", "as-needed"],
-		"arrow-parens": ["error", "always"],
+		"arrow-parens": ["error", "as-needed"],
 		"arrow-spacing": "error",
 		"generator-star-spacing": ["error", {"before": false, "after": true}],
 		"no-duplicate-imports": "error",

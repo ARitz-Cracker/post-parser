@@ -1,5 +1,5 @@
 const{Writable} = require("stream");
-
+const {stripUnsafeProperties} = require("safeify-object");
 class StreamedJSONDecoder extends Writable {
 	constructor(maxLen = 65535){
 		super();
@@ -24,8 +24,10 @@ class StreamedJSONDecoder extends Writable {
 	}
 	_final(callback){
 		try{
-			this.emit("postData", JSON.parse(this._buffer.toString()));
+			// TODO: Maybe fork the jsonparse module and change all the deprecated features it uses
+			this.emit("postData", stripUnsafeProperties(JSON.parse(this._buffer.toString())));
 		}catch(ex){
+			// Truncated, invalid, etc. etc.
 			this.emit("postData", {});
 		}
 		callback();

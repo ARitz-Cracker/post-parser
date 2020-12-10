@@ -1,5 +1,6 @@
 // This code is bad and I should feel bad
 const {Writable, PassThrough} = require("stream");
+const {isSafeProperty} = require("safeify-object");
 
 const charsetAliases = {
 	"iso-8859-1": "latin1",
@@ -11,7 +12,10 @@ const charsetAliases = {
 
 const allowedMultiHeaders = {
 	"content-disposition": true,
-	"content-transfer-encoding": true,
+	/* Content-Transfer-Encoding isn't in HTTP anymore and good fucking riddance. Dealing with all the different 7-bit
+	   encoding methods, as one would do in e-mail, is a big headache. Also, no website I make works for browsers which
+	   don't support es2017, and no browser which does uses Content-Transfer-Encoding. So hooray for me.
+	   "content-transfer-encoding": true, */
 	"content-type": true
 };
 const MAX_MULTIPART_HEADER_LENGTH = 1024;
@@ -98,7 +102,8 @@ class StreamedMultipartDecoder extends Writable {
 			}
 		}
 	}
-	handleData(chunk, end){
+	handleData(chunk, end, callback){
+		let callbackNeedsToBeCalled = false;
 		let i = 0;
 		let nextIndex;
 		while(i < chunk.length){
@@ -125,14 +130,12 @@ class StreamedMultipartDecoder extends Writable {
 							break;
 						}
 
-						/*
-						 * https://tools.ietf.org/html/rfc7578
-						 * Each part MUST contain a Content-Disposition header field [RFC2183]
-						 * where the disposition type is "form-data".  The Content-Disposition
-						 * header field MUST also contain an additional parameter of "name"; the
-						 * value of the "name" parameter is the original field name from the
-						 * form
-						 */
+						/* https://tools.ietf.org/html/rfc7578
+						   Each part MUST contain a Content-Disposition header field [RFC2183]
+						   where the disposition type is "form-data".  The Content-Disposition
+						   header field MUST also contain an additional parameter of "name"; the
+						   value of the "name" parameter is the original field name from the
+						   form */
 						if(
 							this._curHeaders["content-disposition"] == null ||
 							this._curHeaders["content-disposition"]._ !== "form-data" ||
@@ -142,22 +145,30 @@ class StreamedMultipartDecoder extends Writable {
 							this._multistate = MULTISTATE_IGNORE;
 							break;
 						}
-						this._curDataLen += Buffer.byteLength(this._curHeaders["content-disposition"].name);
+						const propertyName = this._curHeaders["content-disposition"].name;
+						this._curDataLen += Buffer.byteLength(propertyName);
 						if(this._curHeaders["content-disposition"].filename == null){
 							this._multistate = MULTISTATE_DATA;
 						}else{
-							this._curDataLen += Buffer.byteLength(this._curHeaders["content-disposition"].filename);
+							const fileName = this._curHeaders["content-disposition"].filename;
+							this._curDataLen += Buffer.byteLength(fileName);
 							let mimeType = "text/plain";
 							/* istanbul ignore else */
 							if(this._curHeaders["content-type"] != null && this._curHeaders["content-type"]._){
 								mimeType = this._curHeaders["content-type"]._;
 							}
 							this._fileStream = new PassThrough();
-							this.emit("postFile", this._curHeaders["content-disposition"].name, this._curHeaders["content-disposition"].filename, mimeType, this._fileStream);
-							// TODO: content-transfer-encoding isn't implemented here
-							/* istanbul ignore next */
-							if(this._curHeaders["content-transfer-encoding"] != null){
-								this.emit("warning", new Error("TODO: Handle content-transfer-encoding"));
+							if(isSafeProperty(propertyName)){
+								this.emit(
+									"postFile",
+									propertyName,
+									fileName,
+									mimeType,
+									this._fileStream
+								);
+							}else{
+								// Into the void you go!
+								this._fileStream.on("data", Function.prototype);
 							}
 							this._multistate = MULTISTATE_FILE;
 						}
@@ -190,11 +201,11 @@ class StreamedMultipartDecoder extends Writable {
 							chunk = chunk.slice(0, this._maxFileLen - this._curFileLen);
 						}
 						this._curFileLen += chunk.length;
-						/*
-						 * TODO: There's a BIG assumption that the network is slower than the stream destination (usually a file write stream)
-						 * Though the assumption is likely correct, ideally we'd wait until the chunk is written before using the _write callback
-						 */
-						this._fileStream.write(chunk);
+						// The file's destination may be slower than the network, who knows?!
+						if(!this._fileStream.write(chunk)){
+							callbackNeedsToBeCalled = false;
+							this._fileStream.once("drain", callback);
+						}
 					}
 					i = chunk.length;
 					break;
@@ -215,22 +226,21 @@ class StreamedMultipartDecoder extends Writable {
 					if(this._curHeaders["content-type"] != null && this._curHeaders["content-type"].charset){
 						encoding = charsetAliases[this._curHeaders["content-type"].charset];
 						if(encoding == null){
-							this.emit("warning", new Error("Unsupported charset: " + this._curHeaders["content-type"].charset));
-							encoding = "utf8";
+							encoding = "latin1"; // mojibake ho!
 						}
 					}
 					/* istanbul ignore next */
 					if(encoding == null && this.decoded._charset_){
 						encoding = charsetAliases[this.decoded._charset_];
 						if(encoding == null){
-							this.emit("warning", new Error("Unsupported charset: " + this.decoded._charset_));
-							encoding = "utf8";
+							encoding = "latin1";
 						}
 					}
 					encoding = encoding || "utf8";
-					this.decoded[
-						this._curHeaders["content-disposition"].name
-					] = this._curVal.toString(encoding);
+					const propertyName = this._curHeaders["content-disposition"].name;
+					if(isSafeProperty(propertyName)){
+						this.decoded[propertyName] = this._curVal.toString(encoding);
+					}
 					this._curHeaders = {};
 					this._multistate = MULTISTATE_HEADERS;
 					this._curVal = Buffer.alloc(0);
@@ -238,13 +248,16 @@ class StreamedMultipartDecoder extends Writable {
 				}
 				case MULTISTATE_FILE:
 					this._fileStream.end();
-					// Falls througs
+					// Falls through
 				case MULTISTATE_IGNORE:
 					this._curHeaders = {};
 					this._multistate = MULTISTATE_HEADERS;
 				default:
 					// MULTISTATE_HEADERS goes here, nothing happens.
 			}
+		}
+		if(callbackNeedsToBeCalled){
+			callback();
 		}
 	}
 	lookForBoundry(chunk){
@@ -261,19 +274,19 @@ class StreamedMultipartDecoder extends Writable {
 		}
 		return [ null, null ];
 	}
-	processBounderies(maxLen){
+	processBounderies(maxLen, callback){
 		while(this._buffer.length >= maxLen){
 			const searchEnd = this._buffer.length - this._bufferSearchLength;
 			if(searchEnd < 0){
-				this.handleData(this._buffer, true);
+				this.handleData(this._buffer, true, callback);
 				break;
 			}
 			const[ dataEnd, newDataStart ] = this.lookForBoundry(this._buffer);
 			if(dataEnd == null){
-				this.handleData(this._buffer.slice(0, searchEnd), false);
+				this.handleData(this._buffer.slice(0, searchEnd), false, callback);
 				this._buffer = this._buffer.slice(searchEnd);
 			}else{
-				this.handleData(this._buffer.slice(0, dataEnd), true);
+				this.handleData(this._buffer.slice(0, dataEnd), true, callback);
 				if(newDataStart){
 					this._buffer = this._buffer.slice(newDataStart);
 				}else{
@@ -308,12 +321,11 @@ class StreamedMultipartDecoder extends Writable {
 				return;
 			}
 		}
-		this.processBounderies(this._minBufferLength);
-		callback();
+		this.processBounderies(this._minBufferLength, callback);
 	}
 	_final(callback){
 		if(!this.ended && this._buffer.length > 0){
-			this.processBounderies(0);
+			this.processBounderies(0, callback);
 		}
 		this.emit("postData", this.decoded);
 		callback();

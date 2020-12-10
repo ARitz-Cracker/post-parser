@@ -1,13 +1,19 @@
-const{PassThrough} = require("stream");
-const{HTTP_STATUS_ERROR, HTTP_STATUS_UNSUPPORTED_MEDIA_TYPE} = require("./http-status.js");
-const{StreamedJSONDecoder} = require("./parser-types/json.js");
-const{StreamedMultipartDecoder} = require("./parser-types/multipart.js");
-const{StreamedURIDecoder} = require("./parser-types/urlencoded.js");
+const {PassThrough} = require("stream");
+const {StreamedJSONDecoder} = require("./parser-types/json.js");
+const {StreamedMultipartDecoder} = require("./parser-types/multipart.js");
+const {StreamedURIDecoder} = require("./parser-types/urlencoded.js");
+const HTTP_STATUS_UNSUPPORTED_MEDIA_TYPE = 415;
+const HTTP_STATUS_ERROR = 500;
+
 
 /**
  * Thrown by the POSTParser constructor when the content-type header given is invaild
  */
 class POSTParseError extends Error {
+	/**
+	 * @param {string} message 
+	 * @param {number} [httpStatus=500] 
+	 */
 	constructor(message, httpStatus){
 		super(message);
 		this.httpStatus = (httpStatus | 0) || HTTP_STATUS_ERROR;
@@ -18,7 +24,6 @@ POSTParseError.prototype.name = "POSTParseError";
 class POSTParser extends PassThrough {
 	constructor(fullContentType, maxTotalLen, maxDataLen, maxFileLen){
 		super();
-
 		let extraStuff = "";
 		let contentType = "";
 		let i = fullContentType.indexOf(";");

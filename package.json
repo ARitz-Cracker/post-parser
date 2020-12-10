@@ -1,19 +1,21 @@
 {
 	"name": "@aritz-cracker/post-parser",
-	"version": "0.9.29",
-	"description": "Simple event-emitting",
+	"version": "1.0.0",
+	"description": "Simple event-emitting HTTP/1.1 POST request parser",
 	"bin": "./bin/snowball_server.js",
 	"main": "index.js",
 	"private": true,
 	"scripts": {
+		"docs": "jsdoc ./index.js ./parser-types ./README.md -d docs",
 		"test": "mocha",
 		"test:all": "TEST_EVERYTHING=y mocha",
 		"test:cov": "nyc --check-coverage --lines 100 --functions 100 --branches 100 --statements 100 mocha",
 		"test:final": "eslint . && npm run test:cov",
 		"test:lint": "eslint .",
-		"travis:start": "npm run test:final",
-		"travis:after": "nyc report --reporter=text-lcov | coveralls",
-		"postinstall": "node scripts/postinstall.js"
+		"ci:start": "npm run test:final",
+		"ci:after": "nyc report --reporter=text-lcov | coveralls",
+		"postinstall": "node ./scripts/postinstall.js",
+		"prepublishOnly": "npm run test:final"
 	},
 	"repository": {
 		"type": "git",
@@ -27,16 +29,14 @@
 	},
 	"homepage": "https://github.com/ARitz-Cracker/post-parser",
 	"dependencies": {
-		"arc-config": "^1.1.2",
-		"scon": "^2.1.2",
-		"ws": "^7.1.2",
-		"wtfnode": "^0.8.0"
+		"safeify-object": "^1.0.0"
 	},
 	"devDependencies": {
 		"chai": "^4.2.0",
 		"chai-as-promised": "^7.1.1",
 		"eslint": "^7.15.0",
 		"mocha": "^8.2.1",
-		"nyc": "^15.1.0"
+		"nyc": "^15.1.0",
+		"jsdoc": "^3.6.6"
 	}
 }

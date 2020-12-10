@@ -1,13 +1,13 @@
 /*
  * A lot of this code is adapted from querystring.unescapeBuffer in NodeJS
  * Copyright Joyent, Inc. and other Node contributors.
- * Copyright (c) 2019 Aritz Beobide-Cardinal
+ * Copyright (c) 2019-2020 Aritz Beobide-Cardinal
  */
 const {Writable} = require("stream");
 
 // eslint-disable-next-line no-magic-numbers
 // eslint-disable-next-line array-element-newline
-const unhexTable = [
+const unhexTable = new Int8Array([
 	-1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, /* eslint-disable-line */ // 0 - 15
 	-1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, /* eslint-disable-line */ // 16 - 31
 	-1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, /* eslint-disable-line */ // 32 - 47
@@ -24,7 +24,7 @@ const unhexTable = [
 	-1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, /* eslint-disable-line */
 	-1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, /* eslint-disable-line */
 	-1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1  /* eslint-disable-line */ // ... 255
-];
+]);
 
 class StreamedURIDecoder extends Writable {
 	constructor(maxLen = 65535){
@@ -53,9 +53,10 @@ class StreamedURIDecoder extends Writable {
 			}
 		}else if(c === 38){ // "&"
 			this._key = true;
-			this.decoded[this._curKey.toString()] = this._curVal.slice(0, this.outIndex).toString();
-
-			// console.log(this._curKey+" = "+this._curVal.slice(0,this.outIndex));
+			const propertyName = this._curKey.toString();
+			if(isSafeProperty(propertyName)){
+				this.decoded[propertyName] = this._curVal.slice(0, this.outIndex).toString();
+			}
 			this._curKey = Buffer.allocUnsafe(0);
 			this._curVal = Buffer.allocUnsafe(0);
 			this.outIndex = 0;
@@ -120,7 +121,7 @@ class StreamedURIDecoder extends Writable {
 					this._hexchar = c;
 					this._n = unhexTable[c];
 					if(!(this._n >= 0)){
-						out[this.outIndex++] = 37/* %*/;
+						out[this.outIndex++] = 37; // '%'
 						if(this.checkPostdataSeperators(c)){
 							out[this.outIndex++] = c;
 						}
@@ -134,7 +135,7 @@ class StreamedURIDecoder extends Writable {
 					this.URIState = 0;
 					this._m = unhexTable[c];
 					if(!(this._m >= 0)){
-						out[this.outIndex++] = 37/* %*/;
+						out[this.outIndex++] = 37; // '%'
 						out[this.outIndex++] = this._hexchar;
 						if(this.checkPostdataSeperators(c)){
 							out[this.outIndex++] = c;
@@ -174,10 +175,17 @@ class StreamedURIDecoder extends Writable {
 				out[this.outIndex++] = this._hexchar;
 			}
 		}
+		let propertyName;
+		let propertyValue;
 		if(this._key){
-			this.decoded[this._curKey.slice(0, this.outIndex).toString()] = null;
+			propertyName = this._curKey.slice(0, this.outIndex).toString();
+			propertyValue = null;
 		}else{
-			this.decoded[this._curKey.toString()] = this._curVal.slice(0, this.outIndex).toString();
+			propertyName = this._curKey.toString();
+			propertyValue = this._curVal.slice(0, this.outIndex).toString();
+		}
+		if(isSafeProperty(propertyName)){
+			this.decoded[propertyName] = propertyValue;
 		}
 		this.emit("postData", this.decoded);
 		callback();
