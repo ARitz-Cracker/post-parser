@@ -1,6 +1,7 @@
 /* eslint-disable prefer-arrow-callback */
 /* eslint-disable no-magic-numbers */
 /* eslint-disable require-await */
+/* eslint-disable no-new */
 const chai = require("chai");
 chai.use(require("chai-as-promised"));
 const expect = chai.expect;
@@ -9,7 +10,7 @@ const fs = require("fs");
 const {StreamToBuffer} = require("stream-to-buffer-to-stream");
 const postFile = fs.readFileSync(__dirname + "/../test_files/multipart/post_file.png");
 describe("POST Parsing: auto selection", function(){
-	it("parses json input", async function() {
+	it("parses json input", async function(){
 		const parser = new POSTParser("application/json");
 		parser.end(JSON.stringify({hello: "world"}));
 		await expect(new Promise(resolve => {
@@ -54,13 +55,13 @@ describe("POST Parsing: auto selection", function(){
 			new POSTParser("aaaaaaaaaaa");
 		}).to.throw("Unsupported content-type");
 	});
-	it("passes file uploads", async function() {
+	it("passes file uploads", async function(){
 		const parser = new POSTParser("multipart/form-data; boundary=\"---------------------------14137654051526174327127624341\"");
 		const postDataPromise = new Promise(resolve => {
 			parser.once("postData", resolve);
 		});
 		const fileDataPromise = new Promise(resolve => {
-			parser.once("postFile", async (name, fileName, mimeType, contentStream) => {
+			parser.once("postFile", async(name, fileName, mimeType, contentStream) => {
 				const s2b = new StreamToBuffer();
 				contentStream.pipe(s2b);
 				resolve({

@@ -7,7 +7,7 @@ const charsetAliases = new Map([
 	["utf-8", "utf8"],
 	["utf-16le", "utf16le"],
 	["win-1252", "latin1"] // win-1252 to latin1 is technically incorrect, but nobody uses it nowadays anyway.
-])
+]);
 const allowedMultiHeaders = new Set([
 	"content-disposition",
 	/* Content-Transfer-Encoding isn't in HTTP anymore and good fucking riddance. Dealing with all the different 7-bit

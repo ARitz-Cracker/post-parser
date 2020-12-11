@@ -201,5 +201,5 @@ describe("POST Parsing: URL Encoded", function(){
 		});
 		expect(decodedData).to.deep.equal({hello: "world"});
 		expect(decodedData.__proto__).to.equal(Object.prototype);
-	})
+	});
 });

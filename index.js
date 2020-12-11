@@ -3,8 +3,6 @@ const {StreamedJSONDecoder} = require("./parser-types/json.js");
 const {StreamedMultipartDecoder} = require("./parser-types/multipart.js");
 const {StreamedURIDecoder} = require("./parser-types/urlencoded.js");
 const HTTP_STATUS_UNSUPPORTED_MEDIA_TYPE = 415;
-const HTTP_STATUS_ERROR = 500;
-
 
 /**
  * Thrown by the POSTParser constructor when the content-type header given is invaild
@@ -27,7 +25,7 @@ POSTParseError.prototype.name = "POSTParseError";
  */
 class POSTParser extends PassThrough {
 	/**
-	 * @param {string} fullContentType the value of the received "content-type" header 
+	 * @param {string} fullContentType the value of the received "content-type" header
 	 * @param {number} [maxTotalLen=1114111] (Only applies to multipart POSTs) the total length of the post body in
 	 * bytes
 	 * @param {number} [maxDataLen=65535] Total length of the post body if JSON or uri-encoded posts, or the total size
@@ -106,4 +104,4 @@ class POSTParser extends PassThrough {
 	}
 }
 
-module.exports = {POSTParser, POSTParseError};
+module.exports = {POSTParseError, POSTParser};
