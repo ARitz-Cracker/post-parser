@@ -12,7 +12,6 @@ const foldersToRemove = [
 const filesToRemove = [
 	".eslintignore",
 	".eslintrc.json",
-	".travis.yml",
 	"LICENSE",
 	"README.md"
 ];
@@ -20,5 +19,9 @@ foldersToRemove.forEach(folder => {
 	fs.rmdirSync(folder, {recursive: true});
 });
 filesToRemove.forEach(file => {
-	fs.unlinkSync(file);
+	try{
+		fs.unlinkSync(file);
+	}catch(ex){
+		// File's probably already gone
+	}
 });

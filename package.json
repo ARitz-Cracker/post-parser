@@ -1,6 +1,6 @@
 {
 	"name": "@aritz-cracker/post-parser",
-	"version": "1.0.0",
+	"version": "1.0.1",
 	"description": "Simple event-emitting HTTP/1.1 POST request parser",
 	"main": "index.js",
 	"scripts": {
