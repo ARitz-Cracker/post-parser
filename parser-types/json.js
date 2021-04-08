@@ -1,5 +1,6 @@
 const {Writable} = require("stream");
 const {stripUnsafeProperties} = require("safeify-object");
+const {HTTP_STATUS_PAYLOAD_TOO_LARGE, POSTParseError} = require("../error");
 class StreamedJSONDecoder extends Writable {
 	constructor(maxLen = 65535){
 		super();

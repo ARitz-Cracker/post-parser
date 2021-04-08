@@ -2,22 +2,10 @@ const {PassThrough} = require("stream");
 const {StreamedJSONDecoder} = require("./parser-types/json.js");
 const {StreamedMultipartDecoder} = require("./parser-types/multipart.js");
 const {StreamedURIDecoder} = require("./parser-types/urlencoded.js");
-const HTTP_STATUS_UNSUPPORTED_MEDIA_TYPE = 415;
-
-/**
- * Thrown by the POSTParser constructor when the content-type header given is invaild
- */
-class POSTParseError extends Error {
-	/**
-	 * @param {string} message
-	 * @param {number} httpStatus
-	 */
-	constructor(message, httpStatus){
-		super(message);
-		this.httpStatus = httpStatus;
-	}
-}
-POSTParseError.prototype.name = "POSTParseError";
+const {
+	HTTP_STATUS_UNSUPPORTED_MEDIA_TYPE,
+	POSTParseError
+} = require("./error");
 
 /**
  * Parses the body of a POST request

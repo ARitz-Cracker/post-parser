@@ -1,6 +1,7 @@
 // This code is bad and I should feel bad, but I definitely don't have the time to re-factor it. Hey, as long as it works!
 const {Writable, PassThrough} = require("stream");
 const {isSafeProperty} = require("safeify-object");
+const {HTTP_STATUS_PAYLOAD_TOO_LARGE, POSTParseError} = require("../error");
 const charsetAliases = new Map([
 	["iso-8859-1", "latin1"],
 	["us-ascii", "ascii"],
@@ -208,7 +209,10 @@ class StreamedMultipartDecoder extends Writable {
 							const drainOrFinishCallback = () => {
 								this._fileStream.removeListener("drain", drainOrFinishCallback);
 								this._fileStream.removeListener("finish", drainOrFinishCallback);
-								callback();
+								/* istanbul ignore else */
+								if(this._bailedError == null){
+									callback();
+								}
 							};
 							this._fileStream.on("drain", drainOrFinishCallback);
 							this._fileStream.on("finish", drainOrFinishCallback);
@@ -255,6 +259,7 @@ class StreamedMultipartDecoder extends Writable {
 				}
 				case MULTISTATE_FILE:
 					this._fileStream.end();
+					this._fileStream = null;
 					// Falls through
 				case MULTISTATE_IGNORE:
 					this._curHeaders = {};
@@ -326,31 +331,40 @@ class StreamedMultipartDecoder extends Writable {
 		}
 	}
 	_write(chunk, encoding, callback){
-		if(this.ended || this._curTotalLen >= this._maxTotalLen){
-			callback();
-			return;
-		}
-		this._curTotalLen += chunk.length;
-		if(this._curTotalLen > this._maxTotalLen){
-			chunk = chunk.slice(0, chunk.length - (this._curTotalLen - this._maxTotalLen));
-		}
-
-		this._buffer = Buffer.concat([this._buffer, chunk], this._buffer.length + chunk.length);
-		if(this._buffer.length < this._minBufferLength){
-			callback();
-			return;
-		}
-		if(this._boundaryStart != null){
-			if(this._buffer.slice(0, this._boundaryStart.length).equals(this._boundaryStart)){
-				this._buffer = this._buffer.slice(this._boundaryStart.length);
-				delete this._boundaryStart;
-			}else{
-				this.ended = true;
+		try{
+			if(this.ended){
 				callback();
 				return;
 			}
+			if(this._curTotalLen >= this._maxTotalLen){
+				new POSTParseError("Multipart post request too large", HTTP_STATUS_PAYLOAD_TOO_LARGE);
+			}
+			this._curTotalLen += chunk.length;
+			if(this._curTotalLen > this._maxTotalLen){
+				chunk = chunk.slice(0, chunk.length - (this._curTotalLen - this._maxTotalLen));
+			}
+	
+			this._buffer = Buffer.concat([this._buffer, chunk], this._buffer.length + chunk.length);
+			if(this._buffer.length < this._minBufferLength){
+				callback();
+				return;
+			}
+			if(this._boundaryStart != null){
+				if(this._buffer.slice(0, this._boundaryStart.length).equals(this._boundaryStart)){
+					this._buffer = this._buffer.slice(this._boundaryStart.length);
+					delete this._boundaryStart;
+				}else{
+					this.ended = true;
+					callback();
+					return;
+				}
+			}
+			this.processBounderies(this._minBufferLength, callback);
+		}catch(ex){
+			callback(ex);
+			this.ended = true;
+			this._bailedError = ex;
 		}
-		this.processBounderies(this._minBufferLength, callback);
 	}
 	_final(callback){
 		if(!this.ended && this._buffer.length > 0){
