@@ -1,6 +1,6 @@
 {
 	"name": "@aritz-cracker/post-parser",
-	"version": "1.0.1",
+	"version": "1.0.2",
 	"description": "Simple event-emitting HTTP/1.1 POST request parser",
 	"main": "index.js",
 	"scripts": {
@@ -33,9 +33,9 @@
 		"chai": "^4.2.0",
 		"chai-as-promised": "^7.1.1",
 		"eslint": "^7.15.0",
+		"jsdoc": "^3.6.6",
 		"mocha": "^8.2.1",
 		"nyc": "^15.1.0",
-		"jsdoc": "^3.6.6",
 		"stream-to-buffer-to-stream": "^1.0.1"
 	}
 }

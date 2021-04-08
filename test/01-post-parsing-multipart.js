@@ -329,7 +329,7 @@ describe("POST Parsing: Multipart", function(){
 		);
 	});
 	it("Can handle large file uploads with slow stream destinations", async function(){
-		this.timeout(100000);
+		this.timeout(20000);
 		const multipartDecoder = new StreamedMultipartDecoder("4yylm40");
 		const postFilePromise = new Promise(resolve => {
 			multipartDecoder.once("postFile", async(name, fileName, mimeType, fileStream) => {
@@ -374,8 +374,48 @@ describe("POST Parsing: Multipart", function(){
 			content: Buffer.alloc(1000000, "A")
 		});
 	});
+	it("Can handle file uploads with slow stream destinations with all data", async function(){
+		this.timeout(20000);
+		const multipartDecoder = new StreamedMultipartDecoder("4yylm40");
+		const postFilePromise = new Promise(resolve => {
+			multipartDecoder.once("postFile", async(name, fileName, mimeType, fileStream) => {
+				const fileContent = new StreamToBuffer();
+				const slowStream = new Transform({
+					highWaterMark: 1024,
+					transform(chunk, encoding, callback){
+						setTimeout(() => {
+							callback(null, chunk);
+						}, 10);
+					}
+				});
+				fileStream.pipe(slowStream);
+				slowStream.pipe(fileContent);
+				resolve({
+					name,
+					fileName,
+					mimeType,
+					content: await fileContent.result()
+				});
+			});
+		});
+		const postDataPromise = new Promise(resolve => {
+			multipartDecoder.on("postData", resolve);
+		});
+		multipartDecoder.end("--4yylm40\r\n" +
+			"Content-Disposition: form-data; name=\"file_upload\"; filename=\"big_data.txt\"\r\n" +
+			"Content-Type: text/plain\r\n\r\n" +
+			("A".repeat(100000)) +
+			"\r\n--4yylm40--");
+		await expect(postDataPromise).to.eventually.deep.equal({});
+		await expect(postFilePromise).to.eventually.deep.equal({
+			name: "file_upload",
+			fileName: "big_data.txt",
+			mimeType: "text/plain",
+			content: Buffer.alloc(100000, "A")
+		});
+	});
 	it("Can handle multiple large file uploads with slow stream destinations", async function(){
-		this.timeout(100000);
+		this.timeout(20000);
 		const multipartDecoder = new StreamedMultipartDecoder("4yylm40");
 		const postFilePromises = [];
 		const postFilePromiseResolvers = [];

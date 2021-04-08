@@ -205,7 +205,13 @@ class StreamedMultipartDecoder extends Writable {
 						   Otherwise, everything could be handled syncronously */
 						if(!this._fileStream.write(chunk) && callbackNeedsToBeCalled){
 							callbackNeedsToBeCalled = false;
-							this._fileStream.once("drain", callback);
+							const drainOrFinishCallback = () => {
+								this._fileStream.removeListener("drain", drainOrFinishCallback);
+								this._fileStream.removeListener("finish", drainOrFinishCallback);
+								callback();
+							};
+							this._fileStream.on("drain", drainOrFinishCallback);
+							this._fileStream.on("finish", drainOrFinishCallback);
 						}
 					}
 					i = chunk.length;
