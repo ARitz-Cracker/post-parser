@@ -69,7 +69,7 @@ class POSTParser extends PassThrough {
 		this.parser.on("postData", (...args) => {
 			/**
 			 * Fires when the parsing of the POST request is completed. This event will always fire after any
-			 * `postFile` events.
+			 * `postFile` events, unless an error occurs
 			 * @event POSTParser#postData
 			 * @param {Object} submittedData The user-submitted data, note that any properties which exist on
 			 * Object.prototype will be removed

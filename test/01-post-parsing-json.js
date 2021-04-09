@@ -58,29 +58,27 @@ describe("POST Parsing: JSON", function(){
 			{hello: "world"}
 		);
 	});
-	it("doesn't work if there's too much data", function(){
+	it("doesn't work if there's too much data", async function(){
 		return expect((async() => {
 			const decoder = doTest(
 				JSON.stringify({hello: "world"}), undefined, undefined, 8
 			);
-			return new Promise(resolve => {
+			return new Promise((resolve, reject) => {
 				decoder.on("postData", resolve);
+				decoder.on("error", reject);
 			});
-		})()).to.eventually.deep.equal(
-			{}
-		);
+		})()).to.eventually.be.rejectedWith("JSON body too large");
 	});
 	it("doesn't work if there's too much data (slow)", function(){
 		return expect((async() => {
 			const decoder = doTest(
 				JSON.stringify({hello: "world"}), 2, 2, 8
 			);
-			return new Promise(resolve => {
+			return new Promise((resolve, reject) => {
 				decoder.on("postData", resolve);
+				decoder.on("error", reject);
 			});
-		})()).to.eventually.deep.equal(
-			{}
-		);
+		})()).to.eventually.be.rejectedWith("JSON body too large");
 	});
 	it("ignores potentially unsafe properties", async function(){
 		const decoder = doTest(
@@ -91,5 +89,16 @@ describe("POST Parsing: JSON", function(){
 		});
 		expect(decodedData).to.deep.equal({hello: "world"});
 		expect(decodedData.__proto__).to.equal(Object.prototype);
+	});
+	it("doesn't work if the JSON data is malformed", function(){
+		return expect((async() => {
+			const decoder = doTest(
+				"I am invalid JSON data"
+			);
+			return new Promise((resolve, reject) => {
+				decoder.on("postData", resolve);
+				decoder.on("error", reject);
+			});
+		})()).to.eventually.be.rejectedWith("Unexpected");
 	});
 });

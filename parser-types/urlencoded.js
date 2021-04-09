@@ -1,8 +1,9 @@
 /* A lot of this code is adapted from querystring.unescapeBuffer in NodeJS
    Copyright Joyent, Inc. and other Node contributors.
-   Copyright (c) 2018-2020 Aritz Beobide-Cardinal */
+   Copyright (c) 2018-2021 Aritz Beobide-Cardinal */
 const {isSafeProperty} = require("safeify-object");
 const {Writable} = require("stream");
+const {HTTP_STATUS_PAYLOAD_TOO_LARGE, POSTParseError} = require("../error");
 
 // eslint-disable-next-line no-magic-numbers
 // eslint-disable-next-line array-element-newline
@@ -64,14 +65,11 @@ class StreamedURIDecoder extends Writable {
 		}
 	}
 	_write(chunk, encoding, callback){
-		if(this.curLen >= this.maxLen){
-			callback();
-			return;
-		}
 		for(let i = 0; i < chunk.length; i += 1){
 			this.curLen += 1;
 			if(this.curLen > this.maxLen){
-				break;
+				callback(new POSTParseError("querystring body too large", HTTP_STATUS_PAYLOAD_TOO_LARGE));
+				return;
 			}
 			let c = chunk[i];
 			// based on querystring.unescapeBuffer

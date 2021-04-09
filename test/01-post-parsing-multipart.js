@@ -27,7 +27,8 @@ const doTest = async function(testFile, chunkLength, boundary, delay = 10, maxDa
 			content: await fileContent.result()
 		};
 	});
-	const postData = new Promise(resolve => {
+	const postData = new Promise((resolve, reject) => {
+		decoder.on("error", reject);
 		decoder.on("postData", resolve);
 	});
 	for(let i = 0; i < data.length; i += chunkLength){
@@ -188,8 +189,22 @@ describe("POST Parsing: Multipart", function(){
 		);
 	});
 
-	it("ignores a message with Content-Disposition not set to form-data", function(){
+	it("ignores invalid content parts", function(){
 		return expect((async() => doTest("post5", null, "---------------------------14137654051526174327127624341"))()).to.eventually.deep.equal(
+			{
+				files: {},
+				data: {
+					hello: "world",
+					thank: "you"
+				}
+			}
+		);
+	});
+	it("ignores invalid content parts (slow)", function(){
+		this.timeout(5000);
+		return expect(
+			(async() => doTest("post5", 4, "---------------------------14137654051526174327127624341"))()
+		).to.eventually.deep.equal(
 			{
 				files: {},
 				data: {
@@ -201,29 +216,20 @@ describe("POST Parsing: Multipart", function(){
 	});
 
 	it("ignores data further than the maxTotal limit", function(){
-		return expect((async() => doTest("post2", null, "---------------------------14137654051526174327127624341", 1, undefined, undefined, 188))()).to.eventually.deep.equal(
-			{
-				files: {},
-				data: {hello: "world"}
-			}
-		);
+		return expect(
+			(async() => doTest("post2", null, "---------------------------14137654051526174327127624341", 1, undefined, undefined, 188))()
+		).to.eventually.be.rejectedWith("Multipart body too large");
 	});
 
 	it("ignores data further than the maxTotal limit (slow)", function(){
-		return expect((async() => doTest("post2", 2, "---------------------------14137654051526174327127624341", 1, undefined, undefined, 188))()).to.eventually.deep.equal(
-			{
-				files: {},
-				data: {hello: "world"}
-			}
-		);
+		return expect(
+			(async() => doTest("post2", 2, "---------------------------14137654051526174327127624341", 1, undefined, undefined, 188))()
+		).to.eventually.be.rejectedWith("Multipart body too large");
 	});
 	it("ignores data further than the maxData limit", function(){
-		return expect((async() => doTest("post2", 2, "---------------------------14137654051526174327127624341", 1, 8))()).to.eventually.deep.equal(
-			{
-				files: {},
-				data: {hello: "wor"}
-			}
-		);
+		return expect(
+			(async() => doTest("post2", 2, "---------------------------14137654051526174327127624341", 1, 8))()
+		).to.eventually.be.rejectedWith("Multipart data value too large");
 	});
 	it("upload files", function(){
 		return expect((async() => doTest("post6", null, "---------------------------14137654051526174327127624341"))()).to.eventually.deep.equal(
@@ -241,18 +247,9 @@ describe("POST Parsing: Multipart", function(){
 	});
 
 	it("truncates files if they're above the file size limit", function(){
-		return expect((async() => doTest("post6", null, "---------------------------14137654051526174327127624341", 1, undefined, 6969))()).to.eventually.deep.equal(
-			{
-				files: {
-					uploaded_file: {
-						fileName: "post_file.png",
-						mimeType: "image/png",
-						content: postFile.slice(0, 6969)
-					}
-				},
-				data: {}
-			}
-		);
+		return expect(
+			(async() => doTest("post6", null, "---------------------------14137654051526174327127624341", 1, undefined, 6969))()
+		).to.eventually.be.rejectedWith("Multipart file too large");
 	});
 
 	it("upload files (slow)", function(){
@@ -271,18 +268,9 @@ describe("POST Parsing: Multipart", function(){
 	});
 
 	it("truncates files if they're above the file size limit (slow)", function(){
-		return expect((async() => doTest("post6", 69, "---------------------------14137654051526174327127624341", 1, undefined, 6969))()).to.eventually.deep.equal(
-			{
-				files: {
-					uploaded_file: {
-						fileName: "post_file.png",
-						mimeType: "image/png",
-						content: postFile.slice(0, 6969)
-					}
-				},
-				data: {}
-			}
-		);
+		return expect(
+			(async() => doTest("post6", 69, "---------------------------14137654051526174327127624341", 1, undefined, 6969))()
+		).to.eventually.be.rejectedWith("Multipart file too large");
 	});
 
 	it("handles a boundery without a CRLF as part of the data", function(){

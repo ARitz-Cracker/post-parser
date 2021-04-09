@@ -182,17 +182,14 @@ describe("POST Parsing: URL Encoded", function(){
 			{a: null}
 		);
 	});
-	it("ignores data past the specified size limit", function(){
-		return Promise.all([
-			expect((async() => {
-				const decoder = doTest("abc=d", 2, 10, 1);
-				return new Promise(resolve => {
-					decoder.on("postData", resolve);
-				});
-			})()).to.eventually.deep.equal(
-				{a: null}
-			)
-		]);
+	it("doesn't work with data past the specified size limit", function(){
+		return expect((async() => {
+			const decoder = doTest("abc=d", 2, 10, 1);
+			return new Promise((resolve, reject) => {
+				decoder.on("error", reject);
+				decoder.on("postData", resolve);
+			});
+		})()).to.eventually.be.rejectedWith("querystring body too large");
 	});
 	it("ignores data with potentially unsafe properties", async function(){
 		const decoder = doTest("hello=world&__proto__=evil&valueOf=evil");

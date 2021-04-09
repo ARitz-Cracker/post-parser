@@ -183,40 +183,36 @@ class StreamedMultipartDecoder extends Writable {
 					}
 					break;
 				case MULTISTATE_DATA:
-					/* istanbul ignore else */
-					if(this._curDataLen < this._maxDataLen){
-						chunk = chunk.slice(i);
-						if((this._curDataLen + chunk.length) > this._maxDataLen){
-							chunk = chunk.slice(0, this._maxDataLen - this._curDataLen);
-						}
-						this._curDataLen += chunk.length;
-						this._curVal = Buffer.concat([this._curVal, chunk], this._curVal.length + chunk.length);
+					chunk = chunk.slice(i);
+					if((this._curDataLen + chunk.length) > this._maxDataLen){
+						throw new POSTParseError("Multipart data value too large", HTTP_STATUS_PAYLOAD_TOO_LARGE);
 					}
+					this._curDataLen += chunk.length;
+					this._curVal = Buffer.concat([this._curVal, chunk], this._curVal.length + chunk.length);
 					i = chunk.length;
 					break;
 				case MULTISTATE_FILE:
-					if(this._curFileLen < this._maxFileLen){
-						chunk = chunk.slice(i);
-						if((this._curFileLen + chunk.length) > this._maxFileLen){
-							chunk = chunk.slice(0, this._maxFileLen - this._curFileLen);
-						}
-						this._curFileLen += chunk.length;
-						/* The file's destination may be slower than the network, who knows?!
-						   This is also the literally only reason why I'm moving the write callback around...
-						   Otherwise, everything could be handled syncronously */
-						if(!this._fileStream.write(chunk) && callbackNeedsToBeCalled){
-							callbackNeedsToBeCalled = false;
-							const drainOrFinishCallback = () => {
-								this._fileStream.removeListener("drain", drainOrFinishCallback);
-								this._fileStream.removeListener("finish", drainOrFinishCallback);
-								/* istanbul ignore else */
-								if(this._bailedError == null){
-									callback();
-								}
-							};
-							this._fileStream.on("drain", drainOrFinishCallback);
-							this._fileStream.on("finish", drainOrFinishCallback);
-						}
+					chunk = chunk.slice(i);
+					if((this._curFileLen + chunk.length) > this._maxFileLen){
+						throw new POSTParseError("Multipart file too large", HTTP_STATUS_PAYLOAD_TOO_LARGE);
+					}
+					this._curFileLen += chunk.length;
+					/* The file's destination may be slower than the network, who knows?!
+						This is also the literally only reason why I'm moving the write callback around...
+						Otherwise, everything could be handled syncronously */
+					if(!this._fileStream.write(chunk) && callbackNeedsToBeCalled){
+						const fileStream = this._fileStream;
+						callbackNeedsToBeCalled = false;
+						const drainOrFinishCallback = () => {
+							fileStream.removeListener("drain", drainOrFinishCallback);
+							fileStream.removeListener("finish", drainOrFinishCallback);
+							/* istanbul ignore else */
+							if(this._bailedError == null){
+								callback();
+							}
+						};
+						fileStream.on("drain", drainOrFinishCallback);
+						fileStream.on("finish", drainOrFinishCallback);
 					}
 					i = chunk.length;
 					break;
@@ -287,91 +283,99 @@ class StreamedMultipartDecoder extends Writable {
 	processBounderies(maxLen, callback){
 		// All code-paths within the while loop
 		let callbackNeedsToBeCalled = true;
-		while(this._buffer.length >= maxLen){
-			const searchEnd = this._buffer.length - this._bufferSearchLength;
-			if(searchEnd < 0){
+		try{
+			while(this._buffer.length >= maxLen){
+				const searchEnd = this._buffer.length - this._bufferSearchLength;
 				/* istanbul ignore next */
-				if(!this.handleData(this._buffer, true, callbackNeedsToBeCalled ? callback : null)){
-					// TODO: I'm not sure what input would be required to do this
-					callbackNeedsToBeCalled = false;
-				}
-				break;
-			}
-			const [dataEnd, newDataStart] = this.lookForBoundry(this._buffer);
-			if(dataEnd == null){
-				/* istanbul ignore next */
-				if(!this.handleData(
-					this._buffer.slice(0, searchEnd),
-					false,
-					callbackNeedsToBeCalled ? callback : null
-				)){
-					callbackNeedsToBeCalled = false;
-				}
-				this._buffer = this._buffer.slice(searchEnd);
-			}else{
-				/* istanbul ignore next */
-				if(!this.handleData(
-					this._buffer.slice(0, dataEnd),
-					true,
-					callbackNeedsToBeCalled ? callback : null
-				)){
-					// TODO: I'm not sure what input would be required to do this
-					callbackNeedsToBeCalled = false;
-				}
-				if(newDataStart){
-					this._buffer = this._buffer.slice(newDataStart);
-				}else{
-					this.ended = true;
+				if(searchEnd < 0){
+					// I actually don't remember what this entire code block is for, but it's probably important
+					if(!this.handleData(this._buffer, true, callbackNeedsToBeCalled ? callback : null)){
+						// TODO: I'm not sure what input would be required to do this
+						callbackNeedsToBeCalled = false;
+					}
 					break;
 				}
+				const [dataEnd, newDataStart] = this.lookForBoundry(this._buffer);
+				if(dataEnd == null){
+					/* istanbul ignore next */
+					if(!this.handleData(
+						this._buffer.slice(0, searchEnd),
+						false,
+						callbackNeedsToBeCalled ? callback : null
+					)){
+						callbackNeedsToBeCalled = false;
+					}
+					this._buffer = this._buffer.slice(searchEnd);
+				}else{
+					/* istanbul ignore next */
+					if(!this.handleData(
+						this._buffer.slice(0, dataEnd),
+						true,
+						callbackNeedsToBeCalled ? callback : null
+					)){
+						// TODO: I'm not sure what input would be required to do this
+						callbackNeedsToBeCalled = false;
+					}
+					if(newDataStart){
+						this._buffer = this._buffer.slice(newDataStart);
+					}else{
+						this.ended = true;
+						break;
+					}
+				}
 			}
-		}
-		if(callbackNeedsToBeCalled){
-			callback();
+			if(callbackNeedsToBeCalled){
+				callback();
+			}
+		}catch(ex){
+			this._bailedError = ex;
+			if(this._fileStream != null){
+				this._fileStream.end();
+			}
+			/* istanbul ignore else */
+			if(callbackNeedsToBeCalled){
+				callback(ex);
+			}
 		}
 	}
 	_write(chunk, encoding, callback){
-		try{
-			if(this.ended){
-				callback();
-				return;
-			}
-			if(this._curTotalLen >= this._maxTotalLen){
-				new POSTParseError("Multipart post request too large", HTTP_STATUS_PAYLOAD_TOO_LARGE);
-			}
-			this._curTotalLen += chunk.length;
-			if(this._curTotalLen > this._maxTotalLen){
-				chunk = chunk.slice(0, chunk.length - (this._curTotalLen - this._maxTotalLen));
-			}
-	
-			this._buffer = Buffer.concat([this._buffer, chunk], this._buffer.length + chunk.length);
-			if(this._buffer.length < this._minBufferLength){
-				callback();
-				return;
-			}
-			if(this._boundaryStart != null){
-				if(this._buffer.slice(0, this._boundaryStart.length).equals(this._boundaryStart)){
-					this._buffer = this._buffer.slice(this._boundaryStart.length);
-					delete this._boundaryStart;
-				}else{
-					this.ended = true;
-					callback();
-					return;
-				}
-			}
-			this.processBounderies(this._minBufferLength, callback);
-		}catch(ex){
-			callback(ex);
-			this.ended = true;
-			this._bailedError = ex;
+		if(this.ended){
+			callback();
+			return;
 		}
+		this._curTotalLen += chunk.length;
+		if(this._curTotalLen > this._maxTotalLen){
+			callback(new POSTParseError("Multipart body too large", HTTP_STATUS_PAYLOAD_TOO_LARGE));
+			return;
+		}
+
+		this._buffer = Buffer.concat([this._buffer, chunk], this._buffer.length + chunk.length);
+		if(this._buffer.length < this._minBufferLength){
+			callback();
+			return;
+		}
+		if(this._boundaryStart != null){
+			if(this._buffer.slice(0, this._boundaryStart.length).equals(this._boundaryStart)){
+				this._buffer = this._buffer.slice(this._boundaryStart.length);
+				delete this._boundaryStart;
+			}else{
+				this.ended = true;
+				callback();
+				return;
+			}
+		}
+		this.processBounderies(this._minBufferLength, callback);
 	}
 	_final(callback){
 		if(!this.ended && this._buffer.length > 0){
 			this.processBounderies(0, callback);
+		}else{
+			callback();
 		}
-		this.emit("postData", this.decoded);
-		callback();
+		/* istanbul ignore else */
+		if(this._bailedError == null){
+			this.emit("postData", this.decoded);
+		}
 	}
 }
 StreamedMultipartDecoder.prototype._crlf = Buffer.from("\r\n");

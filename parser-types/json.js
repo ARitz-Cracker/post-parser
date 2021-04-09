@@ -9,19 +9,13 @@ class StreamedJSONDecoder extends Writable {
 		this._buffer = Buffer.alloc(0);
 	}
 	_write(chunk, encoding, callback){
-		if(this.curLen < this.maxLen){
-			if((this.curLen + chunk.length) > this.maxLen){
-				this._buffer = Buffer.concat([
-					this._buffer,
-					chunk.slice(0, chunk.length - ((this.curLen + chunk.length) - this.maxLen))
-				], this.maxLen);
-				this.curLen = this.maxLen;
-			}else{
-				this._buffer = Buffer.concat([this._buffer, chunk], this._buffer.length + chunk.length);
-				this.curLen += chunk.length;
-			}
+		if((this.curLen + chunk.length) > this.maxLen){
+			callback(new POSTParseError("JSON body too large", HTTP_STATUS_PAYLOAD_TOO_LARGE));
+		}else{
+			this._buffer = Buffer.concat([this._buffer, chunk], this._buffer.length + chunk.length);
+			this.curLen += chunk.length;
+			callback();
 		}
-		callback();
 	}
 	_final(callback){
 		try{
@@ -29,9 +23,8 @@ class StreamedJSONDecoder extends Writable {
 			this.emit("postData", stripUnsafeProperties(JSON.parse(this._buffer.toString())));
 		}catch(ex){
 			// Truncated, invalid, etc. etc.
-			this.emit("postData", {});
+			callback(ex);
 		}
-		callback();
 	}
 }
 
